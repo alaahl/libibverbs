@@ -228,6 +228,62 @@ struct ibv_mr *__ibv_reg_mr(struct ibv_pd *pd, void *addr,
 }
 default_symver(__ibv_reg_mr, ibv_reg_mr);
 
+int __ibv_rereg_mr(struct ibv_mr *mr, int flags,
+		   struct ibv_pd *pd, void *addr,
+		   size_t length, int access)
+{
+	int dofork_onfail = 0;
+	int err;
+	void *old_addr;
+	size_t old_len;
+
+	if (flags & ~IBV_REREG_MR_FLAGS_SUPPORTED) {
+		errno = EINVAL;
+		return errno;
+	}
+
+	if ((flags & IBV_REREG_MR_CHANGE_TRANSLATION) &&
+	    (!length || !addr)) {
+		errno = EINVAL;
+		return errno;
+	}
+
+	if (access && !(flags & IBV_REREG_MR_CHANGE_ACCESS)) {
+		errno = EINVAL;
+		return errno;
+	}
+
+	if (!mr->context->ops.rereg_mr) {
+		errno = ENOSYS;
+		return errno;
+	}
+
+	if (flags & IBV_REREG_MR_CHANGE_TRANSLATION) {
+		err = ibv_dontfork_range(addr, length);
+		if (err)
+			return err;
+		dofork_onfail = 1;
+	}
+
+	old_addr = mr->addr;
+	old_len = mr->length;
+	err = mr->context->ops.rereg_mr(mr, flags, pd, addr, length, access);
+	if (!err) {
+		if (flags & IBV_REREG_MR_CHANGE_TRANSLATION) {
+			ibv_dofork_range(old_addr, old_len);
+			mr->addr    = addr;
+			mr->length  = length;
+		}
+		if (flags & IBV_REREG_MR_CHANGE_PD)
+			mr->pd = pd;
+	} else if (dofork_onfail) {
+		ibv_dofork_range(addr, length);
+	}
+
+	return err;
+}
+default_symver(__ibv_rereg_mr, ibv_rereg_mr);
+
 int __ibv_dereg_mr(struct ibv_mr *mr)
 {
 	int ret;

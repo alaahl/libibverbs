@@ -411,7 +411,8 @@ enum ibv_rereg_mr_flags {
 	IBV_REREG_MR_CHANGE_TRANSLATION	= (1 << 0),
 	IBV_REREG_MR_CHANGE_PD		= (1 << 1),
 	IBV_REREG_MR_CHANGE_ACCESS	= (1 << 2),
-	IBV_REREG_MR_KEEP_VALID		= (1 << 3)
+	IBV_REREG_MR_KEEP_VALID		= (1 << 3),
+	IBV_REREG_MR_FLAGS_SUPPORTED	= ((IBV_REREG_MR_KEEP_VALID << 1) - 1)
 };
 
 struct ibv_mr {
@@ -1227,6 +1228,12 @@ static inline int ibv_close_xrcd(struct ibv_xrcd *xrcd)
 struct ibv_mr *ibv_reg_mr(struct ibv_pd *pd, void *addr,
 			  size_t length, int access);
 
+/**
+ * ibv_rereg_mr - Re-Register a memory region
+ */
+int ibv_rereg_mr(struct ibv_mr *mr, int flags,
+		 struct ibv_pd *pd, void *addr,
+		 size_t length, int access);
 /**
  * ibv_dereg_mr - Deregister a memory region
  */

@@ -79,7 +79,8 @@ union ibv_gid {
 	((type *) ((uint8_t *)(ptr) - offsetof(type, member)))
 #endif
 
-#define vext_field_avail(type, fld, sz) (offsetof(type, fld) < (sz))
+#define vext_field_avail(type, fld, sz) \
+	(offsetof(type, fld) + sizeof(((type *)NULL)->fld) <= (sz))
 
 static void *__VERBS_ABI_IS_EXTENDED = ((uint8_t *) NULL) - 1;
 

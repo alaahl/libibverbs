@@ -41,6 +41,8 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <string.h>
+#include <dirent.h>
+#include <linux/ip.h>
 
 #include "ibverbs.h"
 #ifndef NRESOLVE_NEIGH
@@ -579,24 +581,111 @@ struct ibv_ah *__ibv_create_ah(struct ibv_pd *pd, struct ibv_ah_attr *attr)
 }
 default_symver(__ibv_create_ah, ibv_create_ah);
 
+enum ibv_roce_gid_type {
+	IBV_IB_ROCE_V1_GID_TYPE,
+	IBV_ROCE_V2_GID_TYPE,
+	IBV_ROCE_V1_5_GID_TYPE,
+};
+
+static int ibv_query_gid_type(struct ibv_context *context,
+			      uint8_t port_num,
+			      unsigned int index,
+			      enum ibv_roce_gid_type *type)
+{
+	char *dir_path;
+	char name[32];
+	char buff[41];
+	DIR *dir;
+
+	snprintf(name, sizeof(name), "ports/%d/gid_attrs/types/%d",
+		 port_num, index);
+	if (ibv_read_sysfs_file(context->device->ibdev_path, name, buff,
+				sizeof(buff)) <= 0) {
+		if (asprintf(&dir_path, "%s/%s/%d/%s/",
+			     context->device->ibdev_path,
+			     "ports", port_num, "gid_attrs") < 0)
+			return ENOMEM;
+		dir = opendir(dir_path);
+		free(dir_path);
+		if (!dir) {
+			if (errno == ENOENT)
+				/* Assuming that if gid_attrs doesn't
+				 * exist, we have an old kernel and all
+				 * GIDs are IB/RoCE v1
+				 */
+				*type = IBV_IB_ROCE_V1_GID_TYPE;
+			else
+				return errno;
+		} else {
+			closedir(dir);
+			return EFAULT;
+		}
+	} else {
+		if (!strcmp(buff, "IB/RoCE V1"))
+			*type = IBV_IB_ROCE_V1_GID_TYPE;
+		else if (!strcmp(buff, "RoCE V2"))
+			*type = IBV_ROCE_V2_GID_TYPE;
+		else if (!strcmp(buff, "RoCE V1.5"))
+			*type = IBV_ROCE_V1_5_GID_TYPE;
+		else
+			return EINVAL;
+	}
+
+	return 0;
+}
+
 static int ibv_find_gid_index(struct ibv_context *context, uint8_t port_num,
-			      union ibv_gid *gid)
+			      union ibv_gid *gid, uint32_t gid_type)
 {
 	union ibv_gid sgid;
+	uint32_t sgid_type = 0;
 	int i = 0, ret;
 
 	do {
-		ret = ibv_query_gid(context, port_num, i++, &sgid);
-	} while (!ret && memcmp(&sgid, gid, sizeof *gid));
+		ret = ibv_query_gid(context, port_num, i, &sgid);
+		if (!ret)
+			ret = ibv_query_gid_type(context, port_num, i, &sgid_type);
+		i++;
+	} while (!ret && (memcmp(&sgid, gid, sizeof *gid) || (gid_type != sgid_type)));
 
 	return ret ? ret : i - 1;
+}
+
+static inline void map_ipv4_to_ipv6(__be32 ipv4,
+				    struct in6_addr *ipv6)
+{
+	ipv6->s6_addr32[0] = 0;
+	ipv6->s6_addr32[1] = 0;
+	ipv6->s6_addr32[2] = htonl(0x0000FFFF);
+	ipv6->s6_addr32[3] = ipv4;
+}
+
+static int get_grh_header_version(uint8_t roce_type)
+{
+	switch (roce_type) {
+	case 0:
+	case 1:
+		return 6;
+	case 2:
+		return 4;
+	default:
+		break;
+	}
+	return 0;
 }
 
 int ibv_init_ah_from_wc(struct ibv_context *context, uint8_t port_num,
 			struct ibv_wc *wc, struct ibv_grh *grh,
 			struct ibv_ah_attr *ah_attr)
 {
+	union {
+		union ibv_gid gid;
+		struct in6_addr addr;
+	} sgid;
+	struct iphdr *iph = (struct iphdr *)((void *)grh + 20);
 	uint32_t flow_class;
+	uint32_t sgid_type;
+	int version;
 	int ret;
 
 	memset(ah_attr, 0, sizeof *ah_attr);
@@ -605,19 +694,52 @@ int ibv_init_ah_from_wc(struct ibv_context *context, uint8_t port_num,
 	ah_attr->src_path_bits = wc->dlid_path_bits;
 	ah_attr->port_num = port_num;
 
+
 	if (wc->wc_flags & IBV_WC_GRH) {
 		ah_attr->is_global = 1;
-		ah_attr->grh.dgid = grh->sgid;
+		version = get_grh_header_version(wc->sl & 0x7);
+		if (version == 4) {
+			if (iph->protocol == IPPROTO_UDP)
+				sgid_type = IBV_ROCE_V2_GID_TYPE;
+			else
+				sgid_type = IBV_ROCE_V1_5_GID_TYPE;
 
-		ret = ibv_find_gid_index(context, port_num, &grh->dgid);
-		if (ret < 0)
-			return ret;
+			map_ipv4_to_ipv6(iph->saddr,
+					 (struct in6_addr *)&ah_attr->grh.dgid);
+			map_ipv4_to_ipv6(iph->daddr,
+					 (struct in6_addr *)&sgid.addr);
+			ret = ibv_find_gid_index(context, port_num, &sgid.gid, sgid_type);
+			if (ret < 0)
+				return ret;
 
-		ah_attr->grh.sgid_index = (uint8_t) ret;
-		flow_class = ntohl(grh->version_tclass_flow);
-		ah_attr->grh.flow_label = flow_class & 0xFFFFF;
-		ah_attr->grh.hop_limit = grh->hop_limit;
-		ah_attr->grh.traffic_class = (flow_class >> 20) & 0xFF;
+			ah_attr->grh.sgid_index = (uint8_t) ret;
+
+			ah_attr->grh.flow_label = iph->id & 0xfffff;
+			ah_attr->grh.hop_limit = iph->ttl;
+			ah_attr->grh.traffic_class = iph->tos;
+		} else if (version == 6) {
+			ah_attr->grh.dgid = grh->sgid;
+
+			if (grh->next_hdr == IPPROTO_UDP)
+				sgid_type = IBV_ROCE_V2_GID_TYPE;
+			else if (grh->next_hdr == 0x1b)
+				sgid_type = IBV_IB_ROCE_V1_GID_TYPE;
+			else
+				sgid_type = IBV_ROCE_V1_5_GID_TYPE;
+
+			ret = ibv_find_gid_index(context, port_num, &grh->dgid, sgid_type);
+			if (ret < 0)
+				return ret;
+
+			ah_attr->grh.sgid_index = (uint8_t) ret;
+			flow_class = ntohl(grh->version_tclass_flow);
+			ah_attr->grh.flow_label = flow_class & 0xFFFFF;
+			ah_attr->grh.hop_limit = grh->hop_limit;
+			ah_attr->grh.traffic_class = (flow_class >> 20) & 0xFF;
+		} else {
+			errno = EPROTONOSUPPORT;
+			return EPROTONOSUPPORT;
+		}
 	}
 	return 0;
 }

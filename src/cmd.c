@@ -881,7 +881,10 @@ static void create_qp_handle_resp_common(struct ibv_context *context,
 }
 
 enum {
-	CREATE_QP_EX2_SUP_CREATE_FLAGS = IBV_QP_CREATE_BLOCK_SELF_MCAST_LB,
+	CREATE_QP_EX2_SUP_CREATE_FLAGS = IBV_QP_CREATE_BLOCK_SELF_MCAST_LB |
+		IBV_QP_CREATE_CROSS_CHANNEL |
+		IBV_QP_CREATE_MANAGED_SEND |
+		IBV_QP_CREATE_MANAGED_RECV
 };
 
 int ibv_cmd_create_qp_ex2(struct ibv_context *context,

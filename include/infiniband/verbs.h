@@ -795,6 +795,11 @@ enum ibv_qp_init_attr_mask {
 
 enum ibv_qp_create_flags {
 	IBV_QP_CREATE_BLOCK_SELF_MCAST_LB       = 1 << 1,
+	IBV_QP_CREATE_CROSS_CHANNEL		= 1 << 2,
+	IBV_QP_CREATE_MANAGED_SEND		= 1 << 3,
+	IBV_QP_CREATE_MANAGED_RECV		= 1 << 4,
+	IBV_QP_CREATE_IGNORE_SQ_OVERFLOW	= 1 << 5,
+	IBV_QP_CREATE_IGNORE_RQ_OVERFLOW	= 1 << 6
 };
 
 struct ibv_qp_init_attr_ex {

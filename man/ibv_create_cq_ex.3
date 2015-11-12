@@ -47,10 +47,17 @@ enum ibv_wc_flags_ex {
         IBV_WC_EX_WITH_COMPLETION_TIMESTAMP  = 1 << 12, /* Require completion timestamp in WC */
 };
 
+enum ibv_create_cq_attr_flags {
+	IBV_CREATE_CQ_ATTR_COMPLETION_TIMESTAMP	= 1 << 0,
+	IBV_CREATE_CQ_ATTR_IGNORE_OVERRUN	= 1 << 1 /* Ignore completion queue overrun errors */
+};
 
 enum ibv_cq_init_attr_mask {
         IBV_CQ_INIT_ATTR_FLAGS               = 1 << 0,
+        IBV_CQ_INIT_ATTR_FLAGS	= 1 << 0,
+        IBV_CREATE_CQ_ATTR_RESERVED	= 1 << 1
 };
+
 .SH "RETURN VALUE"
 .B ibv_create_cq_ex()
 returns a pointer to the CQ, or NULL if the request fails.
@@ -70,6 +77,10 @@ CQ should be destroyed with ibv_destroy_cq.
 .BR ibv_create_qp (3)
 .SH "AUTHORS"
 .TP
-Matan Barak <matanb@mellanox.com>
+Matan Barak
+.RI < matanb@mellanox.com >
+.TP
+Leon Romanovsky
+.RI < leonro@mellanox.com >
 .TP
 Yishai Hadas <yishaih@mellanox.com>

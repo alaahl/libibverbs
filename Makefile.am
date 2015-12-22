@@ -23,7 +23,8 @@ src_libibverbs_la_DEPENDENCIES = $(srcdir)/src/libibverbs.map
 
 bin_PROGRAMS = examples/ibv_devices examples/ibv_devinfo \
     examples/ibv_asyncwatch examples/ibv_rc_pingpong examples/ibv_uc_pingpong \
-    examples/ibv_ud_pingpong examples/ibv_srq_pingpong examples/ibv_xsrq_pingpong
+    examples/ibv_ud_pingpong examples/ibv_srq_pingpong examples/ibv_xsrq_pingpong \
+    examples/ibv_cc_pingpong
 examples_ibv_devices_SOURCES = examples/device_list.c
 examples_ibv_devices_LDADD = $(top_builddir)/src/libibverbs.la $(LIBNL_LIBS)
 examples_ibv_devinfo_SOURCES = examples/devinfo.c
@@ -38,6 +39,8 @@ examples_ibv_srq_pingpong_SOURCES = examples/srq_pingpong.c examples/pingpong.c
 examples_ibv_srq_pingpong_LDADD = $(top_builddir)/src/libibverbs.la $(LIBNL_LIBS)
 examples_ibv_xsrq_pingpong_SOURCES = examples/xsrq_pingpong.c examples/pingpong.c
 examples_ibv_xsrq_pingpong_LDADD = $(top_builddir)/src/libibverbs.la $(LIBNL_LIBS)
+examples_ibv_cc_pingpong_SOURCES = examples/cc_pingpong.c examples/pingpong.c
+examples_ibv_cc_pingpong_LDADD = $(top_builddir)/src/libibverbs.la $(LIBNL_LIBS)
 examples_ibv_asyncwatch_SOURCES = examples/asyncwatch.c
 examples_ibv_asyncwatch_LDADD = $(top_builddir)/src/libibverbs.la $(LIBNL_LIBS)
 
@@ -51,6 +54,7 @@ libibverbsinclude_HEADERS = include/infiniband/arch.h include/infiniband/driver.
 man_MANS = man/ibv_asyncwatch.1 man/ibv_devices.1 man/ibv_devinfo.1	\
     man/ibv_rc_pingpong.1 man/ibv_uc_pingpong.1 man/ibv_ud_pingpong.1	\
     man/ibv_srq_pingpong.1 man/ibv_alloc_pd.3 man/ibv_attach_mcast.3	\
+    man/ibv_cc_pingpong.1						\
     man/ibv_create_ah.3 man/ibv_create_ah_from_wc.3			\
     man/ibv_create_comp_channel.3 man/ibv_create_cq.3			\
     man/ibv_create_qp.3 man/ibv_create_srq.3 man/ibv_event_type_str.3	\

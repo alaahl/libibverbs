@@ -1,6 +1,6 @@
 .\" -*- nroff -*-
 .\"
-.TH IBV_POST_SEND 3 2006-10-31 libibverbs "Libibverbs Programmer's Manual"
+.TH IBV_POST_SEND 3 2015-12-26 libibverbs "Libibverbs Programmer's Manual"
 .SH "NAME"
 ibv_post_send \- post a list of work requests (WRs) to a send queue
 .SH "SYNOPSIS"
@@ -58,6 +58,18 @@ uint32_t        remote_qpn;     /* QP number of the destination QP */
 uint32_t        remote_qkey;    /* Q_Key number of the destination QP */
 .in -8
 } ud;
+struct {
+.in +8
+struct ibv_cq  *cq;		/* CQ for the wait on */
+int32_t        cq_count;	/* Count of completions of a CQ to met */
+.in -8
+} cqe_wait;
+struct {
+.in +8
+struct ibv_qp  *qp;		/* QP for the release */
+int32_t        wqe_count;	/* Number of work requests to release */
+.in -8
+} wqe_enable;
 .in -8
 } wr;
 union {
@@ -116,6 +128,9 @@ IBV_WR_ATOMIC_FETCH_AND_ADD |            |            |     X     |     X
 IBV_WR_LOCAL_INV            |            |     X      |     X     |     X
 IBV_WR_BIND_MW              |            |     X      |     X     |     X
 IBV_WR_SEND_WITH_INV        |            |     X      |     X     |     X
+IBV_WR_SEND_ENABLE          |            |            |     X
+IBV_WR_RECV_ENABLE          |            |            |     X
+IBV_WR_CQE_WAIT             |            |            |     X
 .fi
 .PP
 The attribute send_flags describes the properties of the \s-1WR\s0. It is either 0 or the bitwise \s-1OR\s0 of one or more of the following flags:
@@ -133,6 +148,8 @@ in a send WQE.  Valid only for Send and RDMA Write.  The L_Key will not be check
 .B IBV_SEND_IP_CSUM \fR Offload the IPv4 and TCP/UDP checksum calculation.
 Valid only when \fBdevice_cap_flags\fR in device_attr indicates current QP is
 supported by checksum offload.
+.TP
+.B IBV_SEND_WAIT_EN_LAST \fR Mark this work request as a last one in the cross-channel offloaded sequence.
 .SH "RETURN VALUE"
 .B ibv_post_send()
 returns 0 on success, or the value of errno on failure (which indicates the failure reason).
@@ -155,7 +172,11 @@ after the call returns.
 .BR ibv_poll_cq (3)
 .SH "AUTHORS"
 .TP
-Dotan Barak <dotanba@gmail.com>
+Dotan Barak
+.RI < dotanba@gmail.com >
+.TP
+Leon Romanovsky
+.RI < leonro@mellanox.com >
 .TP
 Majd Dibbiny <majd@mellanox.com>
 .TP

@@ -914,6 +914,9 @@ enum ibv_wr_opcode {
 	IBV_WR_LOCAL_INV,
 	IBV_WR_BIND_MW,
 	IBV_WR_SEND_WITH_INV,
+	IBV_WR_SEND_ENABLE,
+	IBV_WR_RECV_ENABLE,
+	IBV_WR_CQE_WAIT,
 };
 
 enum ibv_send_flags {
@@ -921,7 +924,8 @@ enum ibv_send_flags {
 	IBV_SEND_SIGNALED	= 1 << 1,
 	IBV_SEND_SOLICITED	= 1 << 2,
 	IBV_SEND_INLINE		= 1 << 3,
-	IBV_SEND_IP_CSUM	= 1 << 4
+	IBV_SEND_IP_CSUM	= 1 << 4,
+	IBV_SEND_WAIT_EN_LAST   = 1 << 5
 };
 
 struct ibv_sge {
@@ -954,6 +958,14 @@ struct ibv_send_wr {
 			uint32_t	remote_qpn;
 			uint32_t	remote_qkey;
 		} ud;
+		struct {
+			struct ibv_cq  *cq;
+			int32_t		cq_count;
+		} cqe_wait;
+		struct {
+			struct ibv_qp  *qp;
+			int32_t		wqe_count;
+		} wqe_enable;
 	} wr;
 	union {
 		struct {

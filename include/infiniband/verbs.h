@@ -434,6 +434,8 @@ struct ibv_mw {
 	struct ibv_context     *context;
 	struct ibv_pd	       *pd;
 	uint32_t		rkey;
+	uint32_t		handle;
+	enum ibv_mw_type	type;
 };
 
 struct ibv_global_route {
@@ -1238,6 +1240,31 @@ int ibv_rereg_mr(struct ibv_mr *mr, int flags,
  * ibv_dereg_mr - Deregister a memory region
  */
 int ibv_dereg_mr(struct ibv_mr *mr);
+
+/**
+ * ibv_alloc_mw - Allocate a memory window
+ */
+static inline struct ibv_mw *ibv_alloc_mw(struct ibv_pd *pd,
+					  enum ibv_mw_type type)
+{
+	struct ibv_mw *mw;
+
+	if (!pd->context->ops.alloc_mw) {
+		errno = ENOSYS;
+		return NULL;
+	}
+
+	mw = pd->context->ops.alloc_mw(pd, type);
+	return mw;
+}
+
+/**
+ * ibv_dealloc_mw - Free a memory window
+ */
+static inline int ibv_dealloc_mw(struct ibv_mw *mw)
+{
+	return mw->context->ops.dealloc_mw(mw);
+}
 
 /**
  * ibv_create_comp_channel - Create a completion event channel

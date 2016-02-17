@@ -386,6 +386,79 @@ struct ibv_wc {
 	uint8_t			dlid_path_bits;
 };
 
+enum ibv_wc_flags_ex {
+	IBV_WC_EX_GRH			= 1 << 0,
+	IBV_WC_EX_IMM			= 1 << 1,
+	IBV_WC_EX_CSUM_OK		= 1 << 2,
+	IBV_WC_EX_INV			= 1 << 3,
+	IBV_WC_EX_WITH_BYTE_LEN		= 1 << 4,
+	IBV_WC_EX_WITH_IMM		= 1 << 5,
+	IBV_WC_EX_WITH_QP_NUM		= 1 << 6,
+	IBV_WC_EX_WITH_SRC_QP		= 1 << 7,
+	IBV_WC_EX_WITH_PKEY_INDEX	= 1 << 8,
+	IBV_WC_EX_WITH_SLID		= 1 << 9,
+	IBV_WC_EX_WITH_SL		= 1 << 10,
+	IBV_WC_EX_WITH_DLID_PATH_BITS	= 1 << 11,
+};
+
+enum {
+	IBV_WC_STANDARD_FLAGS = IBV_WC_EX_WITH_BYTE_LEN		|
+				 IBV_WC_EX_WITH_IMM		|
+				 IBV_WC_EX_WITH_QP_NUM		|
+				 IBV_WC_EX_WITH_SRC_QP		|
+				 IBV_WC_EX_WITH_PKEY_INDEX	|
+				 IBV_WC_EX_WITH_SLID		|
+				 IBV_WC_EX_WITH_SL		|
+				 IBV_WC_EX_WITH_DLID_PATH_BITS
+};
+
+/* fields order in wc_ex
+ * Note: To guarantee compatibility a new field will be added after fields
+ * of the same size.
+ *	uint32_t		byte_len,
+ *	uint32_t		imm_data;
+ *	uint32_t		qp_num;
+ *	uint32_t		src_qp;
+ *	uint16_t		pkey_index;
+ *	uint16_t		slid;
+ *	uint8_t			sl;
+ *	uint8_t			dlid_path_bits;
+ */
+
+enum {
+	IBV_WC_EX_WITH_64BIT_FIELDS = 0
+};
+
+enum {
+	IBV_WC_EX_WITH_32BIT_FIELDS = IBV_WC_EX_WITH_BYTE_LEN		|
+				      IBV_WC_EX_WITH_IMM		|
+				      IBV_WC_EX_WITH_QP_NUM		|
+				      IBV_WC_EX_WITH_SRC_QP
+};
+
+enum {
+	IBV_WC_EX_WITH_16BIT_FIELDS = IBV_WC_EX_WITH_PKEY_INDEX		|
+				      IBV_WC_EX_WITH_SLID
+};
+
+enum {
+	IBV_WC_EX_WITH_8BIT_FIELDS = IBV_WC_EX_WITH_SL			|
+				     IBV_WC_EX_WITH_DLID_PATH_BITS
+};
+
+struct ibv_wc_ex {
+	uint64_t		wr_id;
+	/* wc_flags is a combination of ibv_wc_flags_ex flags. The IBV_WC_EX_WITH_XXX
+	 * flags dynamically define the valid fields in buffer[0].
+	 */
+	uint64_t		wc_flags;
+	uint32_t		status;
+	uint32_t		opcode;
+	uint32_t		vendor_err;
+	uint32_t		reserved;
+	uint8_t			buffer[0];
+};
+
 enum ibv_access_flags {
 	IBV_ACCESS_LOCAL_WRITE		= 1,
 	IBV_ACCESS_REMOTE_WRITE		= (1<<1),
@@ -1052,8 +1125,16 @@ enum verbs_context_mask {
 	VERBS_CONTEXT_RESERVED	= 1 << 5
 };
 
+struct ibv_poll_cq_ex_attr {
+	unsigned int	max_entries;
+	uint32_t	comp_mask;
+};
+
 struct verbs_context {
 	/*  "grows up" - new fields go here */
+	int (*poll_cq_ex)(struct ibv_cq *ibcq,
+			  struct ibv_wc_ex *wc,
+			  struct ibv_poll_cq_ex_attr *attr);
 	int (*query_device_ex)(struct ibv_context *context,
 			       const struct ibv_query_device_ex_input *input,
 			       struct ibv_device_attr_ex *attr,
@@ -1451,6 +1532,32 @@ ibv_create_srq_ex(struct ibv_context *context,
 		return NULL;
 	}
 	return vctx->create_srq_ex(context, srq_init_attr_ex);
+}
+
+/**
+ * ibv_poll_cq_ex - Poll a CQ for work completions
+ * @cq:the CQ being polled
+ * @wc:array of @max_entries of &struct ibv_wc_ex where completions
+ *   will be returned
+ * @attr: Poll cq attributs
+ *
+ * Poll a CQ for (possibly multiple) completions.  If the return value
+ * is < 0, an error occurred.  If the return value is >= 0, it is the
+ * number of completions returned.  If the return value is
+ * non-negative and strictly less than max_entries, then the CQ was
+ * emptied.
+ */
+
+static inline int ibv_poll_cq_ex(struct ibv_cq *ibcq,
+				 struct ibv_wc_ex *wc,
+				 struct ibv_poll_cq_ex_attr *attr)
+{
+	struct verbs_context *vctx = verbs_get_ctx_op(ibcq->context,
+						      poll_cq_ex);
+	if (!vctx)
+		return ENOSYS;
+
+	return vctx->poll_cq_ex(ibcq, wc, attr);
 }
 
 /**

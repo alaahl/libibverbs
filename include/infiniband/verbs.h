@@ -41,6 +41,7 @@
 #include <stddef.h>
 #include <errno.h>
 #include <string.h>
+#include <infiniband/compiler.h>
 
 #ifdef __cplusplus
 #  define BEGIN_C_DECLS extern "C" {
@@ -465,6 +466,113 @@ struct ibv_wc_ex {
 	uint32_t		reserved;
 	uint8_t			buffer[0];
 };
+
+static inline size_t ibv_wc_ex_get_offsetof64(uint64_t cq_creation_wc_flags,
+					      enum ibv_wc_flags_ex flag)
+{
+	return ibv_popcount64(cq_creation_wc_flags &
+			      IBV_WC_EX_WITH_64BIT_FIELDS &
+			      (flag - 1)) * sizeof(uint64_t);
+}
+
+static inline size_t ibv_wc_ex_get_offsetof32(uint64_t cq_creation_wc_flags,
+					      enum ibv_wc_flags_ex flag)
+{
+	return ibv_popcount64(cq_creation_wc_flags &
+			      (IBV_WC_EX_WITH_64BIT_FIELDS)) *
+		sizeof(uint64_t) +
+		ibv_popcount64(cq_creation_wc_flags &
+			       IBV_WC_EX_WITH_32BIT_FIELDS &
+			       (flag - 1)) * sizeof(uint32_t);
+}
+
+static inline size_t ibv_wc_ex_get_offsetof16(uint64_t cq_creation_wc_flags,
+					      enum ibv_wc_flags_ex flag)
+{
+	return ibv_popcount64(cq_creation_wc_flags &
+			      (IBV_WC_EX_WITH_64BIT_FIELDS)) *
+		sizeof(uint64_t) +
+		ibv_popcount64(cq_creation_wc_flags &
+			       (IBV_WC_EX_WITH_32BIT_FIELDS)) *
+		sizeof(uint32_t) +
+		ibv_popcount64(cq_creation_wc_flags &
+			       IBV_WC_EX_WITH_16BIT_FIELDS &
+			       (flag - 1)) * sizeof(uint16_t);
+}
+
+static inline size_t ibv_wc_ex_get_offsetof8(uint64_t cq_creation_wc_flags,
+					     enum ibv_wc_flags_ex flag)
+{
+	return ibv_popcount64(cq_creation_wc_flags &
+			      (IBV_WC_EX_WITH_64BIT_FIELDS)) *
+		sizeof(uint64_t) +
+		ibv_popcount64(cq_creation_wc_flags &
+			       (IBV_WC_EX_WITH_32BIT_FIELDS)) *
+		sizeof(uint32_t) +
+		ibv_popcount64(cq_creation_wc_flags &
+			       (IBV_WC_EX_WITH_16BIT_FIELDS)) *
+		sizeof(uint16_t) +
+		ibv_popcount64(cq_creation_wc_flags &
+			       IBV_WC_EX_WITH_8BIT_FIELDS &
+			       (flag - 1)) * sizeof(uint8_t);
+}
+
+static inline uint64_t ibv_wc_ex_get64(const struct ibv_wc_ex *wc_ex,
+				       uint64_t cq_creation_wc_flags,
+				       enum ibv_wc_flags_ex flag)
+{
+	uint64_t *pdata = (uint64_t *)(wc_ex->buffer +
+				       ibv_wc_ex_get_offsetof64(cq_creation_wc_flags,
+								flag));
+
+	return *pdata;
+}
+
+static inline uint32_t ibv_wc_ex_get32(const struct ibv_wc_ex *wc_ex,
+				       uint64_t cq_creation_wc_flags,
+				       enum ibv_wc_flags_ex flag)
+{
+	uint32_t *pdata = (uint32_t *)(wc_ex->buffer +
+				       ibv_wc_ex_get_offsetof32(cq_creation_wc_flags,
+								flag));
+
+	return *pdata;
+}
+
+static inline uint16_t ibv_wc_ex_get16(const struct ibv_wc_ex *wc_ex,
+				       uint64_t cq_creation_wc_flags,
+				       enum ibv_wc_flags_ex flag)
+{
+	uint16_t *pdata = (uint16_t *)(wc_ex->buffer +
+				       ibv_wc_ex_get_offsetof16(cq_creation_wc_flags,
+								flag));
+
+	return *pdata;
+}
+
+static inline uint8_t ibv_wc_ex_get8(const struct ibv_wc_ex *wc_ex,
+				     uint64_t cq_creation_wc_flags,
+				     enum ibv_wc_flags_ex flag)
+{
+	uint8_t *pdata = (uint8_t *)(wc_ex->buffer +
+				     ibv_wc_ex_get_offsetof8(cq_creation_wc_flags,
+							     flag));
+
+	return *pdata;
+}
+
+static inline size_t ibv_wc_ex_get_size(uint64_t flags)
+{
+	return ((ibv_popcount64(flags & IBV_WC_EX_WITH_64BIT_FIELDS) *
+		 sizeof(uint64_t) +
+		 ibv_popcount64(flags & IBV_WC_EX_WITH_32BIT_FIELDS) *
+		 sizeof(uint32_t) +
+		 ibv_popcount64(flags & IBV_WC_EX_WITH_16BIT_FIELDS) *
+		 sizeof(uint16_t) +
+		 ibv_popcount64(flags & IBV_WC_EX_WITH_8BIT_FIELDS) *
+		 sizeof(uint8_t) + (sizeof(uint64_t) - 1)) &
+		~(sizeof(uint64_t) - 1)) + sizeof(struct ibv_wc_ex);
+}
 
 enum ibv_access_flags {
 	IBV_ACCESS_LOCAL_WRITE		= 1,

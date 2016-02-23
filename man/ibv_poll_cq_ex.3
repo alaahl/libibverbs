@@ -1,0 +1,181 @@
+.\" -*- nroff -*-
+.\"
+.TH IBV_POLL_CQ_EX 3 2016-2-18 libibverbs "Libibverbs Programmer's Manual"
+.SH "NAME"
+ibv_poll_cq_ex \- poll a completion queue (CQ)
+.SH "SYNOPSIS"
+.nf
+.B #include <infiniband/verbs.h>
+.sp
+.BI "int ibv_poll_cq_ex(struct ibv_cq " "*cq" ", struct ibv_wc_ex " "*wc" ,
+.BI "                   struct ibv_poll_cq_ex_attr " "*attr");
+.fi
+.SH "DESCRIPTION"
+.B ibv_poll_cq_ex()
+polls the CQ
+.I cq
+for work completions according to the pointer argument
+.I attr
+of type struct ibv_poll_cq_ex_attr which is defined in <infiniband/verbs.h>.
+.PP
+.nf
+struct ibv_poll_cq_ex_attr {
+.in +8
+unsigned int    max_entries; /* the number of maximum wc_ex entries in array to return */
+uint32_t        comp_mask;   /* which commands extensions are available */
+.in -8
+};
+
+The first work completions (up to max_entries) are returned by this command.
+.I wc\fR is an array of type struct ibv_wc_ex which is also defined in <infiniband/verbs.h>.
+.PP
+.nf
+struct ibv_wc_ex {
+.in +8
+uint64_t                wr_id;       /* ID of the completed Work Request (WR) */
+uint64_t                wc_flags;    /* Combination of ibv_wc_flags_ex flags. The IBV_WC_EX_WITH_XXX flags
+                                      * dynamically define the fields exist in buffer[0] and hence defines the ibv_wc_ex's size.
+                                      */
+uint32_t                status;      /* Status of the operation */
+uint32_t                opcode;      /* Operation type specified in the completed WR */
+uint32_t                vendor_err;  /* Vendor error syndrome */
+uint32_t                reserved;    /* For future usage
+uint8_t                 buffer[0];   /* Other attributes, as described in wc_flags */
+.in -8
+};
+
+enum ibv_wc_flags_ex {
+.in +8
+IBV_WC_EX_GRH                           = 1 << 0,  /* GRH is present (valid only for UD QPs) */
+IBV_WC_EX_IMM                           = 1 << 1,  /* Action was carried with immediate data */
+IBV_WC_EX_IP_CSUM_OK                    = 1 << 2,  /* TCP/UDP checksum over IPv4 were verified */
+IBV_WC_EX_INV                           = 1 << 3,  /* Action was carried with invalidate immediate data */
+IBV_WC_EX_WITH_BYTE_LEN                 = 1 << 4,  /* The returned wc_ex contains byte_len field */
+IBV_WC_EX_WITH_IMM                      = 1 << 5,  /* The returned wc_ex contains imm_data field */
+IBV_WC_EX_WITH_QP_NUM                   = 1 << 6,  /* The returned wc_ex contains qp_num field */
+IBV_WC_EX_WITH_SRC_QP                   = 1 << 7,  /* The returned wc_ex contains src_qp field */
+IBV_WC_EX_WITH_PKEY_INDEX               = 1 << 8,  /* The returned wc_ex contains pkey_index field */
+IBV_WC_EX_WITH_SLID                     = 1 << 9,  /* The returned wc_ex contains slid field */
+IBV_WC_EX_WITH_SL                       = 1 << 10, /* The returned wc_ex contains sl field */
+IBV_WC_EX_WITH_DLID_PATH_BITS           = 1 << 11, /* The returned wc_ex contains dlid_path_bits field */
+IBV_WC_EX_WITH_COMPLETION_TIMESTAMP     = 1 << 12, /* The returned wc_ex contains completion_timestmap field */
+.in -8
+};
+
+.fi
+wc_flags describes which of the fields in buffer[0] have a valid value. The order of these fields and sizes are always as follows.
+Future fields will be added after the last field from their size.
+
+.nf
+uint64_t        completion_timestamp; /* Raw timestamp of completion. Implementation defined. Can't be relied upon to have any ordering value between more than one driver/hca */
+uint32_t        byte_len;
+uint32_t        imm_data;
+uint32_t        qp_num;
+uint32_t        src_qp;
+uint16_t        pkey_index;
+uint16_t        slid;
+uint8_t         sl;
+uint8_t         dlid_path_bits;
+
+.fi
+Upon creating a CQ using ibv_create_cq_ex, the required wc_flags are given.
+The user is advised to build a custom wc_ex struct that represents those field.
+For example, if
+.I IBV_WC_EX_WITH_QP_NUM\fR and
+.I IBV_WC_EX_WITH_DLID_PATH_BITS\fR are given to ibv_create_cq_ex in wc_flags parameter, the user is advised to build the following struct:
+
+.nf
+struct user_custom_wc {
+.in +8
+struct ibv_wc_ex     wc_ex;
+uint32_t             qp_num;
+uint8_t              dlid_path_bits;
+.in -8
+}
+
+.fi
+This allows the user to use ibv_poll_cq_ex with an array of type struct user_custom_cq.
+An alternative is to use the following functions:
+.nf
+static inline size_t ibv_wc_ex_get_offsetof64(uint64_t cq_creation_wc_flags,
+					      enum ibv_wc_flags_ex flag);
+static inline size_t ibv_wc_ex_get_offsetof32(uint64_t cq_creation_wc_flags,
+					      enum ibv_wc_flags_ex flag);
+static inline size_t ibv_wc_ex_get_offsetof16(uint64_t cq_creation_wc_flags,
+					      enum ibv_wc_flags_ex flag);
+static inline size_t ibv_wc_ex_get_offsetof8(uint64_t cq_creation_wc_flags,
+					     enum ibv_wc_flags_ex flag);
+static inline uint64_t ibv_wc_ex_get64(const struct ibv_wc_ex *wc_ex,
+				       uint64_t cq_creation_wc_flags,
+				       enum ibv_wc_flags_ex flag);
+static inline uint32_t ibv_wc_ex_get32(const struct ibv_wc_ex *wc_ex,
+				       uint64_t cq_creation_wc_flags,
+				       enum ibv_wc_flags_ex flag);
+static inline uint16_t ibv_wc_ex_get16(const struct ibv_wc_ex *wc_ex,
+				       uint64_t cq_creation_wc_flags,
+				       enum ibv_wc_flags_ex flag);
+static inline uint8_t ibv_wc_ex_get8(const struct ibv_wc_ex *wc_ex,
+				     uint64_t cq_creation_wc_flags,
+				     enum ibv_wc_flags_ex flag);
+static inline size_t ibv_wc_ex_get_size(uint64_t flags);
+
+.fi
+.PP
+The
+.I ibv_wc_ex_get_offsetxx\fR functions get the wc_flags that were used to create the CQ with and return the offset of the field in the returned WC.
+It's assumed that this flag exists in the returned wc_ex (meaning wc_ex->wc_flags & flag != 0).
+.PP
+.I ibv_wc_ex_getxx\fR functions return the value of this field given in flag. The same assumption as in
+.I ibv_wc_ex_get_offsetxx\fR also holds here.
+xx refers to the size of the required fields in bits. This size must match the sizes described above.
+.PP
+.I ibv_wc_ex_get_size\fR returns the size of a WC which is returned from CQs created with wc_flags given as the flags parameter.
+
+Users could use these functions by defining an array of ibv_wc_ex_get_size bytes:
+
+.nf
+struct ibv_wc_ex     *wc_ex = calloc(num_entries, ibv_wc_ex_get_size(cq_wc_creation_flags));
+
+.fi
+This array could be used for ibv_poll_cq_ex.
+After calling ibv_poll_cq_ex, the fields could be extracted using:
+
+.nf
+if (wc_ex->wc_flags & IBV_WC_EX_WITH_SL) {
+.in +8
+uint8_t sl = ibv_wc_ex_get8(wc_ex, cq_wc_creation_flags, IBV_WC_EX_WITH_SL);
+.in -8
+}
+
+.fi
+Please note that in x86, using SSE4.2 machine with "-mpopcount" compilation flag will cause these functions to run faster.
+
+Fields that aren't available for a completion won't be indicated in wc_ex->wc_flags and their values are undefined.
+
+.PP
+Not all
+.I wc\fR attributes are always valid. If the completion status is other than
+.B IBV_WC_SUCCESS\fR,
+only the following attributes are valid: wr_id, status, qp_num (if its respective wc_flags bit is set), and vendor_err.
+.SH "RETURN VALUE"
+On success,
+.B ibv_poll_cq_ex()
+returns a non-negative value equal to the number of completions
+found.  On failure, a negative value is returned.
+.SH "NOTES"
+.PP
+Each polled completion is removed from the CQ and cannot be returned to it.
+.PP
+The user should consume work completions at a rate that prevents CQ
+overrun from occurrence.  In case of a CQ overrun, the async event
+.B IBV_EVENT_CQ_ERR
+will be triggered, and the CQ cannot be used.
+.SH "SEE ALSO"
+.BR ibv_poll_cq (3),
+.BR ibv_post_send (3),
+.BR ibv_post_recv (3)
+.SH "AUTHORS"
+.TP
+Matan Barak <matanb@mellanox.com>
+.TP
+Yishai Hadas <yishaih@mellanox.com>
